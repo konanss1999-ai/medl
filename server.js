@@ -20,8 +20,9 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 
 /*
-العناصر:
-0 = 5x
+العناصر الجديدة (10 عناصر)
+
+0 = 0x (ذرة)
 1 = 45x
 2 = 3x
 3 = 25x
@@ -29,17 +30,32 @@ const PORT = process.env.PORT || 3000;
 5 = 10x
 6 = 2x
 7 = 15x
+8 = 5x
+9 = 0x (جزر)
+
+ملاحظة:
+يوجد عنصران للخسارة 0x
+حتى عندما يختار السيرفر خسارة
+تظهر أحيانًا على الذرة وأحيانًا على الجزر
 */
 
 const items = [
-    { id: 0, multiplier: 5, weight: 22 },
+
+    // خسارة
+    { id: 0, multiplier: 0, weight: 22 },
+
+    // جوائز
     { id: 1, multiplier: 45, weight: 1 },
     { id: 2, multiplier: 3, weight: 28 },
     { id: 3, multiplier: 25, weight: 2 },
     { id: 4, multiplier: 7, weight: 18 },
     { id: 5, multiplier: 10, weight: 12 },
     { id: 6, multiplier: 2, weight: 35 },
-    { id: 7, multiplier: 15, weight: 6 }
+    { id: 7, multiplier: 15, weight: 6 },
+    { id: 8, multiplier: 5, weight: 20 },
+
+    // خسارة ثانية
+    { id: 9, multiplier: 0, weight: 22 }
 ];
 
 let countdown = 30;
@@ -50,7 +66,50 @@ let isSpinning = false;
 
 let winnerIndex = 0;
 
+/*
+نظام ذكي للخسارات المتتالية
+*/
+
+let loseStreak = 0;
+
 function chooseWinner() {
+
+    /*
+    احتمالات خاصة عند الخسارات المتتالية
+    */
+
+    // بعد 8 خسائر متتالية -> إجبار ربح
+    if (loseStreak >= 8) {
+
+        const forcedWins = items.filter(item => item.multiplier > 0);
+
+        const randomWin =
+            forcedWins[Math.floor(Math.random() * forcedWins.length)];
+
+        loseStreak = 0;
+
+        return randomWin.id;
+    }
+
+    // بعد 5 خسائر -> فرصة كبيرة لربح متوسط
+    if (loseStreak >= 5) {
+
+        const mediumWins = items.filter(item =>
+            item.multiplier >= 2 &&
+            item.multiplier <= 10
+        );
+
+        const randomMedium =
+            mediumWins[Math.floor(Math.random() * mediumWins.length)];
+
+        loseStreak = 0;
+
+        return randomMedium.id;
+    }
+
+    /*
+    الاختيار الطبيعي بالـ weights
+    */
 
     let totalWeight = 0;
 
@@ -63,6 +122,14 @@ function chooseWinner() {
     for (let item of items) {
 
         if (random < item.weight) {
+
+            // تحديث streak
+            if (item.multiplier === 0) {
+                loseStreak++;
+            } else {
+                loseStreak = 0;
+            }
+
             return item.id;
         }
 
@@ -132,7 +199,7 @@ function startSpinningPhase() {
 
             io.emit("roundEnded", {
                 winner: winnerIndex,
-                multiplier: items[winnerIndex].multiplier
+                multiplier: items.find(i => i.id === winnerIndex).multiplier
             });
 
             setTimeout(() => {
