@@ -17,11 +17,12 @@ const io = new Server(server, {
     }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 /*
-العناصر الجديدة (10 عناصر)
-
+==========================
+العناصر
+==========================
 0 = 0x (ذرة)
 1 = 45x
 2 = 3x
@@ -32,30 +33,30 @@ const PORT = process.env.PORT || 3000;
 7 = 15x
 8 = 5x
 9 = 0x (جزر)
-
-ملاحظة:
-يوجد عنصران للخسارة 0x
-حتى عندما يختار السيرفر خسارة
-تظهر أحيانًا على الذرة وأحيانًا على الجزر
+==========================
 */
 
 const items = [
 
-    // خسارة
-    { id: 0, multiplier: 0, weight: 22 },
+    { id: 0, multiplier: 0, weight: 145 },
 
-    // جوائز
-    { id: 1, multiplier: 45, weight: 1 },
-    { id: 2, multiplier: 3, weight: 28 },
-    { id: 3, multiplier: 25, weight: 2 },
-    { id: 4, multiplier: 7, weight: 18 },
-    { id: 5, multiplier: 10, weight: 12 },
-    { id: 6, multiplier: 2, weight: 35 },
-    { id: 7, multiplier: 15, weight: 6 },
-    { id: 8, multiplier: 5, weight: 20 },
+    { id: 1, multiplier: 45, weight: 3 },
 
-    // خسارة ثانية
-    { id: 9, multiplier: 0, weight: 22 }
+    { id: 2, multiplier: 3, weight: 180 },
+
+    { id: 3, multiplier: 25, weight: 9 },
+
+    { id: 4, multiplier: 7, weight: 55 },
+
+    { id: 5, multiplier: 10, weight: 35 },
+
+    { id: 6, multiplier: 2, weight: 300 },
+
+    { id: 7, multiplier: 15, weight: 18 },
+
+    { id: 8, multiplier: 5, weight: 110 },
+
+    { id: 9, multiplier: 0, weight: 145 }
 ];
 
 let countdown = 30;
@@ -66,32 +67,65 @@ let isSpinning = false;
 
 let winnerIndex = 0;
 
+let loseStreak = 0;
+
 /*
-نظام ذكي للخسارات المتتالية
+==========================
+اختيار عشوائي بالوزن
+==========================
 */
 
-let loseStreak = 0;
+function weightedRandom(list) {
+
+    let totalWeight = 0;
+
+    list.forEach(item => {
+        totalWeight += item.weight;
+    });
+
+    let random = Math.random() * totalWeight;
+
+    for (let item of list) {
+
+        if (random < item.weight) {
+            return item;
+        }
+
+        random -= item.weight;
+    }
+
+    return list[0];
+}
+
+/*
+==========================
+اختيار الفائز
+==========================
+*/
 
 function chooseWinner() {
 
     /*
-    احتمالات خاصة عند الخسارات المتتالية
+    بعد 8 خسائر -> ربح قوي
     */
 
-    // بعد 8 خسائر متتالية -> إجبار ربح
     if (loseStreak >= 8) {
 
-        const forcedWins = items.filter(item => item.multiplier > 0);
+        const strongWins = items.filter(item =>
+            item.multiplier >= 5
+        );
 
-        const randomWin =
-            forcedWins[Math.floor(Math.random() * forcedWins.length)];
+        const result = weightedRandom(strongWins);
 
         loseStreak = 0;
 
-        return randomWin.id;
+        return result.id;
     }
 
-    // بعد 5 خسائر -> فرصة كبيرة لربح متوسط
+    /*
+    بعد 5 خسائر -> ربح متوسط
+    */
+
     if (loseStreak >= 5) {
 
         const mediumWins = items.filter(item =>
@@ -99,45 +133,37 @@ function chooseWinner() {
             item.multiplier <= 10
         );
 
-        const randomMedium =
-            mediumWins[Math.floor(Math.random() * mediumWins.length)];
+        const result = weightedRandom(mediumWins);
 
         loseStreak = 0;
 
-        return randomMedium.id;
+        return result.id;
     }
 
     /*
-    الاختيار الطبيعي بالـ weights
+    النظام الطبيعي
     */
 
-    let totalWeight = 0;
+    const result = weightedRandom(items);
 
-    items.forEach(item => {
-        totalWeight += item.weight;
-    });
+    /*
+    تحديث streak
+    */
 
-    let random = Math.random() * totalWeight;
-
-    for (let item of items) {
-
-        if (random < item.weight) {
-
-            // تحديث streak
-            if (item.multiplier === 0) {
-                loseStreak++;
-            } else {
-                loseStreak = 0;
-            }
-
-            return item.id;
-        }
-
-        random -= item.weight;
+    if (result.multiplier === 0) {
+        loseStreak++;
+    } else {
+        loseStreak = 0;
     }
 
-    return 0;
+    return result.id;
 }
+
+/*
+==========================
+مرحلة الرهان
+==========================
+*/
 
 function startBettingPhase() {
 
@@ -168,6 +194,12 @@ function startBettingPhase() {
 
     }, 1000);
 }
+
+/*
+==========================
+مرحلة الدوران
+==========================
+*/
 
 function startSpinningPhase() {
 
@@ -212,6 +244,12 @@ function startSpinningPhase() {
     }, 1000);
 }
 
+/*
+==========================
+Socket
+==========================
+*/
+
 io.on("connection", (socket) => {
 
     console.log("User Connected:", socket.id);
@@ -232,11 +270,23 @@ io.on("connection", (socket) => {
     });
 });
 
+/*
+==========================
+API
+==========================
+*/
+
 app.get("/", (req, res) => {
 
     res.send("Greedy Star Server Running");
 
 });
+
+/*
+==========================
+تشغيل السيرفر
+==========================
+*/
 
 server.listen(PORT, () => {
 
